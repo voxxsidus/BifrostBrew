@@ -37,6 +37,8 @@ namespace BifrostBrew
             new Harmony(PluginGUID).PatchAll();
             // Vanilla prefabs don't exist yet in Awake; wait for Jotunn to say they're loaded.
             PrefabManager.OnVanillaPrefabsAvailable += AddItems;
+            // Runs on every world load: ObjectDB (and with it the Serving Tray) is rebuilt each time.
+            ItemManager.OnItemsRegistered += AddBrewToServingTray;
         }
 
         private void AddItems()
@@ -46,9 +48,11 @@ namespace BifrostBrew
                 CustomItem meadBase = AddMeadBase();
                 CustomItem brew = AddBrew();
 
-                // Mead bases append the tooltip of the mead they ferment into. The clone still
-                // pointed at the vanilla Lingering Stamina Mead.
-                meadBase.ItemDrop.m_itemData.m_shared.m_appendToolTip = brew.ItemDrop;
+                // Vanilla mead bases show the finished mead's effect in their tooltip by carrying
+                // its status effect (they're Material items, so it can never be consumed). The clone
+                // still carried Lingering Stamina Mead's; point it at the brew's instead.
+                meadBase.ItemDrop.m_itemData.m_shared.m_consumeStatusEffect =
+                    brew.ItemDrop.m_itemData.m_shared.m_consumeStatusEffect;
 
                 AddFermenterConversion();
             }
@@ -73,10 +77,9 @@ namespace BifrostBrew
                 new ConfigDescription("Minutes after a teleport before another Bifrost Brew can be drunk. 0 disables the cooldown. " +
                                       "Status effects aren't saved, so logging out clears an active cooldown.",
                     new AcceptableValueRange<float>(0f, 120f), adminOnly));
-        }
 
-        // Internal prefab name of the Mead Ketill (added in the Bog Witch update).
-        private const string MeadKetill = "piece_MeadCauldron";
+            BifrostRecipe.Bind(Config, adminOnly);
+        }
 
         // Liquid materials on the cloned prefabs (checked against the game's asset bundles):
         // - MeadStaminaLingering: "potion" renderers, slot 0 is the bottle body/liquid; slot 1
@@ -97,20 +100,17 @@ namespace BifrostBrew
             {
                 Name = "$item_meadbasebifrost",
                 Description = "$item_meadbasebifrost_desc",
-                CraftingStation = MeadKetill,
+                // Station and ingredients come from the [Recipe] config section.
+                CraftingStation = BifrostRecipe.GetStationName(),
                 Amount = 1,
-                Requirements = new[]
-                {
-                    new RequirementConfig("Honey", 10),
-                    new RequirementConfig("GreydwarfEye", 5),
-                    new RequirementConfig("SurtlingCore", 1)
-                }
+                Requirements = BifrostRecipe.GetRequirementConfigs()
             };
 
-            var item = new CustomItem("MeadBaseBifrost", "MeadBaseStaminaLingering", config);
+            var item = new CustomItem(BifrostRecipe.MeadBaseName, "MeadBaseStaminaLingering", config);
             Recolor(item.ItemPrefab, MeadBaseLiquidMaterial, BifrostColor);
             RecolorIcon(item, BifrostColor);
             ItemManager.Instance.AddItem(item);
+            BifrostRecipe.Attach(item);
             return item;
         }
 
@@ -128,9 +128,52 @@ namespace BifrostBrew
 
             // Replace the cloned lingering stamina effect with the teleport.
             shared.m_consumeStatusEffect = CreateTeleportEffects(shared.m_icons[0], shared.m_consumeStatusEffect);
+
+            // The clone keeps the lingering mead's Piece component, which is what lets the Serving
+            // Tray place it (ItemDrop.m_pieceEnableObj switches on the bottle model when placed).
+            // Retarget it so the tray shows Bifrost Brew and placing one costs a Bifrost Brew.
+            if (item.ItemPrefab.TryGetComponent(out Piece piece))
+            {
+                piece.m_name = shared.m_name;
+                piece.m_description = shared.m_description;
+                piece.m_icon = shared.m_icons[0];
+                piece.m_resources = new[] { new Piece.Requirement { m_resItem = item.ItemDrop, m_amount = 1, m_recover = true } };
+            }
+            else
+            {
+                Jotunn.Logger.LogWarning("MeadStaminaLingering has no Piece component; Bifrost Brew won't be placeable");
+            }
+
             ItemManager.Instance.AddItem(item);
+            s_brewPrefab = item.ItemPrefab;
             return item;
         }
+
+        private static GameObject s_brewPrefab;
+
+        // Adds Bifrost Brew to the Serving Tray's piece table, right after Lingering Stamina Mead.
+        private static void AddBrewToServingTray()
+        {
+            if (s_brewPrefab == null || ObjectDB.instance == null)
+                return;
+
+            GameObject tray = ObjectDB.instance.GetItemPrefab(ServingTray);
+            PieceTable table = tray != null ? tray.GetComponent<ItemDrop>().m_itemData.m_shared.m_buildPieces : null;
+            if (table == null)
+            {
+                Jotunn.Logger.LogWarning($"{ServingTray} piece table not found; Bifrost Brew won't be placeable");
+                return;
+            }
+
+            if (table.m_pieces.Contains(s_brewPrefab))
+                return;
+
+            int index = table.m_pieces.FindIndex(p => p != null && p.name == "MeadStaminaLingering");
+            table.m_pieces.Insert(index >= 0 ? index + 1 : table.m_pieces.Count, s_brewPrefab);
+        }
+
+        // Internal name of the Serving Tray item.
+        private const string ServingTray = "Feaster";
 
         private static StatusEffect CreateTeleportEffects(Sprite icon, StatusEffect vanillaEffect)
         {
@@ -179,9 +222,9 @@ namespace BifrostBrew
         {
             var conversion = new CustomItemConversion(new FermenterConversionConfig
             {
-                FromItem = "MeadBaseBifrost",
+                FromItem = BifrostRecipe.MeadBaseName,
                 ToItem = "BifrostBrew",
-                ProducedItems = 6
+                ProducedItems = BifrostRecipe.BrewsPerBase.Value
             });
             ItemManager.Instance.AddItemConversion(conversion);
         }
@@ -319,7 +362,7 @@ namespace BifrostBrew
                 { "item_meadbasebifrost", "Mead base: Bifrost" },
                 { "item_meadbasebifrost_desc", "Needs to ferment before it can be drunk." },
                 { "se_bifrostchannel", "Bifrost" },
-                { "se_bifrostchannel_tooltip", "The rainbow bridge is opening. You will be carried home." },
+                { "se_bifrostchannel_tooltip", "Opens the Bifrost and carries you home to your bed." },
                 { "se_bifrostchannel_start", "The Bifrost shimmers around you..." },
                 { "se_bifrostcooldown", "Bifrost-weary" },
                 { "se_bifrostcooldown_tooltip", "The rainbow bridge needs time before it will carry you again." },
