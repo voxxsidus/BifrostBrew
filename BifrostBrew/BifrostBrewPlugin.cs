@@ -5,6 +5,7 @@ using Jotunn.Entities;
 using Jotunn.Managers;
 using Jotunn.Utils;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace BifrostBrew
 {
@@ -44,6 +45,18 @@ namespace BifrostBrew
         // Internal prefab name of the Mead Ketill (added in the Bog Witch update).
         private const string MeadKetill = "piece_MeadCauldron";
 
+        // Liquid materials on the cloned prefabs (checked against the game's asset bundles):
+        // - MeadStaminaLingering: "potion" renderers, slot 0 is the bottle body/liquid; slot 1
+        //   (MistlandsPotions_mat) is the cork, strap, label and seal.
+        // - MeadBaseStaminaLingering: a single "meadbase" material covers the white bowl and the contents.
+        private const string BrewLiquidMaterial = "MajorStaminaPotion_mat";
+        private const string MeadBaseLiquidMaterial = "meadbase";
+
+        // Hue range (0-1) of the amber liquid and glow in the vanilla icons. The red seal, brown
+        // cork/strap and the brown bowl fall outside it and keep their colors.
+        private const float IconMinHue = 30f / 360f;
+        private const float IconMaxHue = 75f / 360f;
+
         // Mead Ketill-crafted base that goes into the fermenter.
         private void AddMeadBase()
         {
@@ -61,27 +74,27 @@ namespace BifrostBrew
                 }
             };
 
-            var item = new CustomItem("MeadBaseBifrost", "MeadBaseHealthMinor", config);
-            Recolor(item.ItemPrefab, BifrostColor);
-            SetIcon(item);
+            var item = new CustomItem("MeadBaseBifrost", "MeadBaseStaminaLingering", config);
+            Recolor(item.ItemPrefab, MeadBaseLiquidMaterial, BifrostColor);
+            RecolorIcon(item, BifrostColor);
             ItemManager.Instance.AddItem(item);
         }
 
         // The finished, drinkable brew. No recipe: it only comes from the fermenter.
         private void AddBrew()
         {
-            var item = new CustomItem("BifrostBrew", "MeadHealthMinor");
+            var item = new CustomItem("BifrostBrew", "MeadStaminaLingering");
             var shared = item.ItemDrop.m_itemData.m_shared;
 
             shared.m_name = "$item_bifrostbrew";
             shared.m_description = "$item_bifrostbrew_desc";
 
-            // The clone still carries the vanilla healing effect. Clear it for now;
+            // The clone still carries the vanilla lingering stamina effect. Clear it for now;
             // the custom teleport StatusEffect goes here later.
             shared.m_consumeStatusEffect = null;
 
-            Recolor(item.ItemPrefab, BifrostColor);
-            SetIcon(item);
+            Recolor(item.ItemPrefab, BrewLiquidMaterial, BifrostColor);
+            RecolorIcon(item, BifrostColor);
             ItemManager.Instance.AddItem(item);
         }
 
@@ -96,43 +109,127 @@ namespace BifrostBrew
             ItemManager.Instance.AddItemConversion(conversion);
         }
 
-        private static void Recolor(GameObject prefab, Color color)
+        private static void Recolor(GameObject prefab, string liquidMaterial, Color color)
         {
+            // IMPORTANT: sharedMaterials on a clone are the SAME assets the vanilla
+            // mead uses. Copy them, or every lingering stamina mead turns blue too.
+            // Renderers that share a material also share its copy.
+            var copies = new Dictionary<Material, Material>();
+
             foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
             {
-                // IMPORTANT: sharedMaterials on a clone are the SAME assets the vanilla
-                // mead uses. Copy them, or every minor healing mead turns blue too.
                 var mats = renderer.sharedMaterials;
+                bool changed = false;
                 for (int i = 0; i < mats.Length; i++)
                 {
-                    if (mats[i] == null) continue;
+                    if (mats[i] == null || mats[i].name != liquidMaterial) continue;
 
-                    // TODO: once you've inspected the prefab, only tint the liquid material
-                    // (check mats[i].name / renderer.name) so the cork and glass keep their colors.
-                    var mat = new Material(mats[i]);
-
-                    if (mat.HasProperty("_Color"))
-                        mat.SetColor("_Color", color);
-
-                    if (mat.HasProperty("_EmissionColor"))
+                    if (!copies.TryGetValue(mats[i], out var copy))
                     {
-                        mat.EnableKeyword("_EMISSION");
-                        mat.SetColor("_EmissionColor", color * 0.6f);
+                        copy = new Material(mats[i]) { name = mats[i].name + "_bifrost" };
+
+                        // Both shaders (Autodesk Interactive, Standard) multiply _Color into the
+                        // _MainTex albedo. The liquid's color lives in the texture (amber/brown),
+                        // so a _Color tint would only darken it toward olive. Hue-shift a copy of
+                        // the texture instead and leave _Color white.
+                        if (!IsHeadless && copy.GetTexture("_MainTex") is Texture2D tex)
+                        {
+                            var shifted = CopyRegion(tex, new Rect(0, 0, tex.width, tex.height), true);
+                            shifted.wrapMode = tex.wrapMode;
+                            shifted.filterMode = tex.filterMode;
+                            shifted.anisoLevel = tex.anisoLevel;
+                            ShiftHue(shifted, color);
+                            copy.SetTexture("_MainTex", shifted);
+                        }
+
+                        copies[mats[i]] = copy;
                     }
 
-                    mats[i] = mat;
+                    mats[i] = copy;
+                    changed = true;
                 }
-                renderer.sharedMaterials = mats;
+                if (changed)
+                    renderer.sharedMaterials = mats;
             }
+
+            // Lights are components on the clone itself, not shared assets, so edit them directly.
+            foreach (var light in prefab.GetComponentsInChildren<Light>(true))
+                light.color = color;
         }
 
-        private static void SetIcon(CustomItem item)
+        // Vanilla icons are hand-made images (upright, tightly framed, glow painted in) that a
+        // RenderManager render of the model can't reproduce. Recolor a copy of the cloned
+        // item's vanilla icon instead, so angle, framing and glow match exactly.
+        private static void RecolorIcon(CustomItem item, Color color)
         {
-            // Renders the recolored model into a sprite so the inventory icon matches.
-            // Alternative: ship a hand-made PNG and load it with AssetUtils.LoadSpriteFromFile.
-            Sprite icon = RenderManager.Instance.Render(item.ItemPrefab, RenderManager.IsometricRotation);
-            if (icon != null)
-                item.ItemDrop.m_itemData.m_shared.m_icons = new[] { icon };
+            var shared = item.ItemDrop.m_itemData.m_shared;
+            if (IsHeadless || shared.m_icons == null || shared.m_icons.Length == 0)
+                return;
+
+            Sprite vanilla = shared.m_icons[0];
+            if (vanilla == null)
+                return;
+
+            Texture2D tex;
+            try
+            {
+                // Icons are rect-packed into IconAtlas; textureRect is the icon's area in the atlas.
+                tex = CopyRegion(vanilla.texture, vanilla.textureRect, false);
+            }
+            catch (System.Exception e)
+            {
+                Jotunn.Logger.LogWarning($"{item.ItemPrefab.name}: could not copy icon {vanilla.name}, keeping vanilla icon. {e.Message}");
+                return;
+            }
+
+            ShiftHue(tex, color, IconMinHue, IconMaxHue);
+            var pivot = new Vector2(vanilla.pivot.x / vanilla.rect.width, vanilla.pivot.y / vanilla.rect.height);
+            var icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), pivot, vanilla.pixelsPerUnit);
+            icon.name = item.ItemPrefab.name;
+            shared.m_icons = new[] { icon };
+        }
+
+        // Dedicated servers have no GPU to blit with, and nothing is rendered there anyway.
+        private static bool IsHeadless => SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null;
+
+        // Copies a region of a texture into a new readable Texture2D. Game textures aren't
+        // CPU-readable (and are often compressed), so go through a RenderTexture.
+        private static Texture2D CopyRegion(Texture tex, Rect region, bool mipChain)
+        {
+            int width = (int)region.width;
+            int height = (int)region.height;
+            var rt = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            var scale = new Vector2(region.width / tex.width, region.height / tex.height);
+            var offset = new Vector2(region.x / tex.width, region.y / tex.height);
+            Graphics.Blit(tex, rt, scale, offset);
+
+            var previous = RenderTexture.active;
+            RenderTexture.active = rt;
+            var result = new Texture2D(width, height, TextureFormat.RGBA32, mipChain) { name = tex.name + "_bifrost" };
+            result.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+            RenderTexture.active = previous;
+            RenderTexture.ReleaseTemporary(rt);
+            return result;
+        }
+
+        // Moves every colored pixel whose hue is within [minHue, maxHue] to the hue of target,
+        // keeping its saturation, brightness and alpha. Near-grey pixels (the empty glass, the
+        // white bowl) are left alone. Uploads the result and makes it no longer CPU-readable.
+        private static void ShiftHue(Texture2D tex, Color target, float minHue = 0f, float maxHue = 1f)
+        {
+            Color.RGBToHSV(target, out float hue, out _, out _);
+            var pixels = tex.GetPixels();
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                Color.RGBToHSV(pixels[i], out float h, out float s, out float v);
+                if (s < 0.15f || h < minHue || h > maxHue) continue;
+
+                var shifted = Color.HSVToRGB(hue, s, v);
+                shifted.a = pixels[i].a;
+                pixels[i] = shifted;
+            }
+            tex.SetPixels(pixels);
+            tex.Apply(true, true);
         }
 
         private void AddLocalizations()
