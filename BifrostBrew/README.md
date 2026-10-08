@@ -8,6 +8,7 @@ Drink a Bifrost Brew and, after a short channel, you are teleported to your bed.
 
 - **Mead base: Bifrost**, brewed at the Mead Ketill.
 - **Bifrost Brew**, fermented from the base. Drinking it opens the Bifrost and sends you home.
+- A rune-ringed portal opens under your feet while blue light spirals around you, then you vanish in a pillar of light. Other players see it too.
 - Blue versions of the lingering stamina mead and its mead base, with matching inventory icons and a blue glow.
 - Configurable channel time and cooldown, synced from the server in multiplayer.
 

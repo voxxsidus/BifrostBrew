@@ -10,6 +10,7 @@ Built with [BepInEx](https://github.com/BepInEx/BepInEx) and [Jötunn](https://g
 
 - **Mead base: Bifrost**, brewed at the Mead Ketill.
 - **Bifrost Brew**, fermented from the base. Drinking it opens the Bifrost and sends you home.
+- A rune-ringed portal opens under your feet while blue light spirals around you, then you vanish in a pillar of light. Other players see it too.
 - Blue recolors of the lingering stamina mead and its mead base, including matching inventory icons and a blue glow.
 - Server-synced config for channel time and cooldown.
 
@@ -113,6 +114,7 @@ Rebuild. The prebuild regenerates the publicized assemblies automatically.
 |---|---|
 | `BifrostBrew/BifrostBrewPlugin.cs` | Plugin entry point: config, items, recipe, fermenter conversion, recolors, localization |
 | `BifrostBrew/BifrostTeleport.cs` | The teleport status effect and the Harmony patch that enforces portal rules |
+| `BifrostBrew/BifrostVfx.cs` | The portal and departure particle effects, built at runtime from vanilla materials |
 | `BifrostBrew/Package/` | Thunderstore manifest and icon |
 | `BifrostBrewUnity/` | Unity project for authoring asset bundles (not used by the mod yet) |
 | `scripts/` | Post-build deploy and packaging scripts |

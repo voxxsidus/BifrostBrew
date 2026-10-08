@@ -152,17 +152,25 @@ namespace BifrostBrew
             channel.m_category = BifrostCategory;
             channel.m_startMessageType = MessageHud.MessageType.Center;
             channel.m_startMessage = "$se_bifrostchannel_start";
-            // Keep the lingering mead's start sound (sfx_Potion_stamina_Start_lingering) but drop
-            // vfx_Potion_stamina_medium, the stamina potion's yellow visual.
+            // Keep the lingering mead's start sound (sfx_Potion_stamina_Start_lingering) but replace
+            // vfx_Potion_stamina_medium, the stamina potion's yellow visual, with the Bifrost portal.
+            var startEffects = new List<EffectList.EffectData>();
             if (vanillaEffect != null)
             {
-                channel.m_startEffects = new EffectList
-                {
-                    m_effectPrefabs = vanillaEffect.m_startEffects.m_effectPrefabs
-                        .Where(e => e.m_prefab != null && !e.m_prefab.name.StartsWith("vfx_"))
-                        .ToArray()
-                };
+                startEffects.AddRange(vanillaEffect.m_startEffects.m_effectPrefabs
+                    .Where(e => e.m_prefab != null && !e.m_prefab.name.StartsWith("vfx_")));
             }
+
+            // Attached so it follows the drinker; removed by SEMan when the channel ends.
+            GameObject channelVfx = BifrostVfx.CreateChannelEffect();
+            if (channelVfx != null)
+                startEffects.Add(new EffectList.EffectData { m_prefab = channelVfx, m_attach = true });
+            channel.m_startEffects = new EffectList { m_effectPrefabs = startEffects.ToArray() };
+
+            // Played where the player leaves from (SE_BifrostChannel only keeps it on a real teleport).
+            GameObject departVfx = BifrostVfx.CreateDepartEffect();
+            if (departVfx != null)
+                channel.m_stopEffects = new EffectList { m_effectPrefabs = new[] { new EffectList.EffectData { m_prefab = departVfx } } };
             ItemManager.Instance.AddStatusEffect(new CustomStatusEffect(channel, false));
             return channel;
         }
@@ -259,11 +267,11 @@ namespace BifrostBrew
         }
 
         // Dedicated servers have no GPU to blit with, and nothing is rendered there anyway.
-        private static bool IsHeadless => SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null;
+        internal static bool IsHeadless => SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null;
 
         // Copies a region of a texture into a new readable Texture2D. Game textures aren't
         // CPU-readable (and are often compressed), so go through a RenderTexture.
-        private static Texture2D CopyRegion(Texture tex, Rect region, bool mipChain)
+        internal static Texture2D CopyRegion(Texture tex, Rect region, bool mipChain)
         {
             int width = (int)region.width;
             int height = (int)region.height;

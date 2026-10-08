@@ -15,6 +15,7 @@ namespace BifrostBrew
         internal static StatusEffect CooldownEffect;
 
         private bool m_fired;
+        private bool m_teleported;
 
         public override void Setup(Character character)
         {
@@ -31,28 +32,37 @@ namespace BifrostBrew
 
             m_fired = true;
             if (m_character is Player player && player == Player.m_localPlayer)
-                Teleport(player);
+                m_teleported = Teleport(player);
+        }
+
+        public override void Stop()
+        {
+            // The departure burst (m_stopEffects) is only for a real teleport, not for dying
+            // mid-channel or a trip blocked by ore. m_stopEffects is this clone's own copy.
+            if (!m_teleported)
+                m_stopEffects = new EffectList();
+            base.Stop();
         }
 
         // Base IsDone treats m_ttl == 0 as "never ends", which would break a 0-second channel.
         public override bool IsDone() => m_fired;
 
-        private static void Teleport(Player player)
+        private static bool Teleport(Player player)
         {
             if (player.IsDead() || player.IsTeleporting())
-                return;
+                return false;
 
             // Re-check: ore picked up during the channel still blocks the trip (the mead is spent).
             if (!player.IsTeleportable(false))
             {
                 player.Message(MessageHud.MessageType.Center, "$msg_noteleport");
-                return;
+                return false;
             }
 
             if (!TryGetHome(out Vector3 destination))
             {
                 player.Message(MessageHud.MessageType.Center, "$msg_bifrost_nohome");
-                return;
+                return false;
             }
 
             // Leave chairs, beds, ship controls and saddles before moving, like a respawn would.
@@ -60,8 +70,11 @@ namespace BifrostBrew
             player.AttachStop();
 
             // distantTeleport: waits for the destination zone to load and finds the floor.
-            if (player.TeleportTo(destination, player.transform.rotation, true))
-                StartCooldown(player);
+            if (!player.TeleportTo(destination, player.transform.rotation, true))
+                return false;
+
+            StartCooldown(player);
+            return true;
         }
 
         // Bed spawn point if set, otherwise the starting stones (same order as a death respawn).
