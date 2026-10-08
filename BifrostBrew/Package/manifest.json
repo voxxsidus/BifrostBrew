@@ -1,10 +1,10 @@
-﻿{
+{
   "name": "BifrostBrew",
-  "description": "",
-  "version_number": "0.0.1",
-  "website_url": "",
+  "description": "A shimmering blue mead that teleports you home to your bed after a short channel. Follows portal rules: no ores or metals.",
+  "version_number": "0.1.0",
+  "website_url": "https://github.com/voxxsidus/BifrostBrew",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2333",
-    "ValheimModding-Jotunn-2.26.1"
+    "ValheimModding-Jotunn-2.27.1"
   ]
 }
