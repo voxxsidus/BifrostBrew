@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using BepInEx;
+using BepInEx.Configuration;
+using HarmonyLib;
 using Jotunn.Configs;
 using Jotunn.Entities;
 using Jotunn.Managers;
@@ -20,9 +23,18 @@ namespace BifrostBrew
 
         private static readonly Color BifrostColor = new Color(0.35f, 0.75f, 1f);
 
+        // Shared by the channel and cooldown effects. Vanilla CanConsumeItem refuses to drink
+        // while any status effect in the item's category is active.
+        private const string BifrostCategory = "bifrostbrew";
+
+        internal static ConfigEntry<float> ChannelSeconds;
+        internal static ConfigEntry<float> CooldownMinutes;
+
         private void Awake()
         {
+            CreateConfig();
             AddLocalizations();
+            new Harmony(PluginGUID).PatchAll();
             // Vanilla prefabs don't exist yet in Awake; wait for Jotunn to say they're loaded.
             PrefabManager.OnVanillaPrefabsAvailable += AddItems;
         }
@@ -31,8 +43,13 @@ namespace BifrostBrew
         {
             try
             {
-                AddMeadBase();
-                AddBrew();
+                CustomItem meadBase = AddMeadBase();
+                CustomItem brew = AddBrew();
+
+                // Mead bases append the tooltip of the mead they ferment into. The clone still
+                // pointed at the vanilla Lingering Stamina Mead.
+                meadBase.ItemDrop.m_itemData.m_shared.m_appendToolTip = brew.ItemDrop;
+
                 AddFermenterConversion();
             }
             finally
@@ -40,6 +57,22 @@ namespace BifrostBrew
                 // Only run once, not on every return to the main menu.
                 PrefabManager.OnVanillaPrefabsAvailable -= AddItems;
             }
+        }
+
+        // Shown in config managers (e.g. BepInEx ConfigurationManager). IsAdminOnly makes Jotunn
+        // sync the server's values to clients and lets only admins change them in multiplayer.
+        private void CreateConfig()
+        {
+            var adminOnly = new ConfigurationManagerAttributes { IsAdminOnly = true };
+
+            ChannelSeconds = Config.Bind("Bifrost Brew", "Channel seconds", 5f,
+                new ConfigDescription("Seconds between drinking Bifrost Brew and being teleported. 0 teleports instantly.",
+                    new AcceptableValueRange<float>(0f, 30f), adminOnly));
+
+            CooldownMinutes = Config.Bind("Bifrost Brew", "Cooldown minutes", 0f,
+                new ConfigDescription("Minutes after a teleport before another Bifrost Brew can be drunk. 0 disables the cooldown. " +
+                                      "Status effects aren't saved, so logging out clears an active cooldown.",
+                    new AcceptableValueRange<float>(0f, 120f), adminOnly));
         }
 
         // Internal prefab name of the Mead Ketill (added in the Bog Witch update).
@@ -58,7 +91,7 @@ namespace BifrostBrew
         private const float IconMaxHue = 75f / 360f;
 
         // Mead Ketill-crafted base that goes into the fermenter.
-        private void AddMeadBase()
+        private CustomItem AddMeadBase()
         {
             var config = new ItemConfig
             {
@@ -78,10 +111,11 @@ namespace BifrostBrew
             Recolor(item.ItemPrefab, MeadBaseLiquidMaterial, BifrostColor);
             RecolorIcon(item, BifrostColor);
             ItemManager.Instance.AddItem(item);
+            return item;
         }
 
         // The finished, drinkable brew. No recipe: it only comes from the fermenter.
-        private void AddBrew()
+        private CustomItem AddBrew()
         {
             var item = new CustomItem("BifrostBrew", "MeadStaminaLingering");
             var shared = item.ItemDrop.m_itemData.m_shared;
@@ -89,13 +123,48 @@ namespace BifrostBrew
             shared.m_name = "$item_bifrostbrew";
             shared.m_description = "$item_bifrostbrew_desc";
 
-            // The clone still carries the vanilla lingering stamina effect. Clear it for now;
-            // the custom teleport StatusEffect goes here later.
-            shared.m_consumeStatusEffect = null;
-
             Recolor(item.ItemPrefab, BrewLiquidMaterial, BifrostColor);
             RecolorIcon(item, BifrostColor);
+
+            // Replace the cloned lingering stamina effect with the teleport.
+            shared.m_consumeStatusEffect = CreateTeleportEffects(shared.m_icons[0], shared.m_consumeStatusEffect);
             ItemManager.Instance.AddItem(item);
+            return item;
+        }
+
+        private static StatusEffect CreateTeleportEffects(Sprite icon, StatusEffect vanillaEffect)
+        {
+            var cooldown = ScriptableObject.CreateInstance<StatusEffect>();
+            cooldown.name = "SE_BifrostCooldown";
+            cooldown.m_name = "$se_bifrostcooldown";
+            cooldown.m_tooltip = "$se_bifrostcooldown_tooltip";
+            cooldown.m_icon = icon;
+            cooldown.m_cooldownIcon = true;
+            cooldown.m_category = BifrostCategory;
+            ItemManager.Instance.AddStatusEffect(new CustomStatusEffect(cooldown, false));
+            SE_BifrostChannel.CooldownEffect = cooldown;
+
+            var channel = ScriptableObject.CreateInstance<SE_BifrostChannel>();
+            channel.name = "SE_BifrostChannel";
+            channel.m_name = "$se_bifrostchannel";
+            channel.m_tooltip = "$se_bifrostchannel_tooltip";
+            channel.m_icon = icon;
+            channel.m_category = BifrostCategory;
+            channel.m_startMessageType = MessageHud.MessageType.Center;
+            channel.m_startMessage = "$se_bifrostchannel_start";
+            // Keep the lingering mead's start sound (sfx_Potion_stamina_Start_lingering) but drop
+            // vfx_Potion_stamina_medium, the stamina potion's yellow visual.
+            if (vanillaEffect != null)
+            {
+                channel.m_startEffects = new EffectList
+                {
+                    m_effectPrefabs = vanillaEffect.m_startEffects.m_effectPrefabs
+                        .Where(e => e.m_prefab != null && !e.m_prefab.name.StartsWith("vfx_"))
+                        .ToArray()
+                };
+            }
+            ItemManager.Instance.AddStatusEffect(new CustomStatusEffect(channel, false));
+            return channel;
         }
 
         private void AddFermenterConversion()
@@ -240,7 +309,13 @@ namespace BifrostBrew
                 { "item_bifrostbrew", "Bifrost Brew" },
                 { "item_bifrostbrew_desc", "A shimmering mead that carries you home across the rainbow bridge." },
                 { "item_meadbasebifrost", "Mead base: Bifrost" },
-                { "item_meadbasebifrost_desc", "Needs to ferment before it can be drunk." }
+                { "item_meadbasebifrost_desc", "Needs to ferment before it can be drunk." },
+                { "se_bifrostchannel", "Bifrost" },
+                { "se_bifrostchannel_tooltip", "The rainbow bridge is opening. You will be carried home." },
+                { "se_bifrostchannel_start", "The Bifrost shimmers around you..." },
+                { "se_bifrostcooldown", "Bifrost-weary" },
+                { "se_bifrostcooldown_tooltip", "The rainbow bridge needs time before it will carry you again." },
+                { "msg_bifrost_nohome", "The Bifrost cannot find your home" }
             });
         }
     }
