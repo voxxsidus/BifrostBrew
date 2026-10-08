@@ -17,7 +17,7 @@ Drink a Bifrost Brew and, after a short channel, you are teleported to your bed.
 
 | Step | Station | Input | Output |
 |---|---|---|---|
-| Brew the base | Mead Ketill | 10 Honey, 5 Greydwarf Eye, 1 Surtling Core | 1 Mead base: Bifrost |
+| Brew the base | Mead Ketill | 10 Honey, 10 Greydwarf Eye, 2 Surtling Core | 1 Mead base: Bifrost |
 | Ferment | Fermenter | 1 Mead base: Bifrost | 6 Bifrost Brew |
 
 These are the defaults. The ingredients, station and yield can all be changed in the config (see below).
@@ -36,13 +36,13 @@ Rules:
 
 ## Configuration
 
-Edit `BepInEx/config/com.preston.bifrostbrew.cfg` (created on first launch), your mod manager's config editor, or an in-game configuration manager.
+Edit `BepInEx/config/com.voxxsidus.bifrostbrew.cfg` (created on first launch), your mod manager's config editor, or an in-game configuration manager.
 
 | Setting | Default | Range | Description |
 |---|---|---|---|
 | Channel seconds | 5 | 0–30 | Delay between drinking and teleporting. 0 teleports instantly. |
 | Cooldown minutes | 0 | 0–120 | Time after a teleport before another brew can be drunk. 0 disables the cooldown. |
-| Mead base ingredients | `Honey:10, GreydwarfEye:5, SurtlingCore:1` | | Ingredients as `ItemName:Amount` pairs, using internal item names. Unknown names are skipped. |
+| Mead base ingredients | `Honey:10, GreydwarfEye:10, SurtlingCore:2` | | Ingredients as `ItemName:Amount` pairs, using internal item names. Unknown names are skipped. |
 | Mead base station | `piece_MeadCauldron` | | Crafting station prefab name: `piece_MeadCauldron` (Mead Ketill), `piece_cauldron` (Cauldron), `piece_workbench` (Workbench). Empty = craft anywhere. |
 | Brews per base | 6 | 1–50 | Bifrost Brews the fermenter produces from one mead base. |
 

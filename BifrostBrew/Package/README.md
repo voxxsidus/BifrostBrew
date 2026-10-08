@@ -8,6 +8,8 @@ Drink a Bifrost Brew and, after a short channel, you are teleported to your bed.
 
 - **Mead base: Bifrost**, brewed at the Mead Ketill.
 - **Bifrost Brew**, fermented from the base. Drinking it opens the Bifrost and sends you home.
+- A rune-ringed portal opens under your feet while blue light spirals around you, then you vanish in a pillar of light. Other players see it too.
+- Place Bifrost Brew on tables and shelves with the Serving Tray, like vanilla meads. Drinking a placed brew sends you home too.
 - Blue versions of the lingering stamina mead and its mead base, with matching inventory icons and a blue glow.
 - Configurable channel time and cooldown, synced from the server in multiplayer.
 
@@ -15,8 +17,10 @@ Drink a Bifrost Brew and, after a short channel, you are teleported to your bed.
 
 | Step | Station | Input | Output |
 |---|---|---|---|
-| Brew the base | Mead Ketill | 10 Honey, 5 Greydwarf Eye, 1 Surtling Core | 1 Mead base: Bifrost |
+| Brew the base | Mead Ketill | 10 Honey, 10 Greydwarf Eye, 2 Surtling Core | 1 Mead base: Bifrost |
 | Ferment | Fermenter | 1 Mead base: Bifrost | 6 Bifrost Brew |
+
+These are the defaults. The ingredients, station and yield can all be changed in the config (see below).
 
 ## How it works
 
@@ -32,14 +36,19 @@ Rules:
 
 ## Configuration
 
-Edit `BepInEx/config/com.preston.bifrostbrew.cfg` (created on first launch), your mod manager's config editor, or an in-game configuration manager.
+Edit `BepInEx/config/com.voxxsidus.bifrostbrew.cfg` (created on first launch), your mod manager's config editor, or an in-game configuration manager.
 
 | Setting | Default | Range | Description |
 |---|---|---|---|
 | Channel seconds | 5 | 0–30 | Delay between drinking and teleporting. 0 teleports instantly. |
 | Cooldown minutes | 0 | 0–120 | Time after a teleport before another brew can be drunk. 0 disables the cooldown. |
+| Mead base ingredients | `Honey:10, GreydwarfEye:10, SurtlingCore:2` | | Ingredients as `ItemName:Amount` pairs, using internal item names. Unknown names are skipped. |
+| Mead base station | `piece_MeadCauldron` | | Crafting station prefab name: `piece_MeadCauldron` (Mead Ketill), `piece_cauldron` (Cauldron), `piece_workbench` (Workbench). Empty = craft anywhere. |
+| Brews per base | 6 | 1–50 | Bifrost Brews the fermenter produces from one mead base. |
 
 In multiplayer, the server's settings apply to everyone and only admins can change them.
+
+Recipe changes apply immediately, even mid-game. Fermentation already in progress yields the new amount when tapped.
 
 ## Installation
 

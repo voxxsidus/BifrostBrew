@@ -17,7 +17,7 @@ namespace BifrostBrew
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
     public class BifrostBrewPlugin : BaseUnityPlugin
     {
-        public const string PluginGUID = "com.preston.bifrostbrew";
+        public const string PluginGUID = "com.voxxsidus.bifrostbrew";
         public const string PluginName = "BifrostBrew";
         public const string PluginVersion = "0.1.0";
 

@@ -15,7 +15,7 @@ namespace BifrostBrew
     {
         public const string MeadBaseName = "MeadBaseBifrost";
 
-        private const string DefaultIngredients = "Honey:10, GreydwarfEye:5, SurtlingCore:1";
+        private const string DefaultIngredients = "Honey:10, GreydwarfEye:10, SurtlingCore:2";
         private const string DefaultStation = "piece_MeadCauldron"; // Mead Ketill
         private const int DefaultBrewsPerBase = 6;
 
