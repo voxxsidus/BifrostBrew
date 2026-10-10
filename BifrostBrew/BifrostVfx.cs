@@ -14,9 +14,10 @@ namespace BifrostBrew
         // Being networked also makes the effects visible to other players.
         private const string NetworkedBase = "vfx_Potion_stamina_medium";
 
-        private static readonly Color Cyan = new Color(0.45f, 0.85f, 1f);
-        private static readonly Color Blue = new Color(0.3f, 0.5f, 1f);
-        private static readonly Color Violet = new Color(0.7f, 0.45f, 1f);
+        // Also used for the brew's liquid gradient (BifrostBrewPlugin.BifrostGradient).
+        internal static readonly Color Cyan = new Color(0.45f, 0.85f, 1f);
+        internal static readonly Color Blue = new Color(0.3f, 0.5f, 1f);
+        internal static readonly Color Violet = new Color(0.7f, 0.45f, 1f);
 
         private static Material s_glow;   // soft round glow ("point")
         private static Material s_ring;   // ring ("shockwave")

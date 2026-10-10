@@ -88,10 +88,28 @@ namespace BifrostBrew
         private const string BrewLiquidMaterial = "MajorStaminaPotion_mat";
         private const string MeadBaseLiquidMaterial = "meadbase";
 
-        // Hue range (0-1) of the amber liquid and glow in the vanilla icons. The red seal, brown
-        // cork/strap and the brown bowl fall outside it and keep their colors.
-        private const float IconMinHue = 30f / 360f;
-        private const float IconMaxHue = 75f / 360f;
+        // Which vanilla icon pixels are the amber liquid and glow (h, s in 0-1). The red seal, brown
+        // strap and brown bowl fall outside hue 30-75 deg. The tan cork overlaps that range but is
+        // both lower in hue (30-38 deg) and paler (saturation <= 0.45) than the liquid.
+        private static bool IsIconLiquid(float h, float s) =>
+            h >= 30f / 360f && h <= 75f / 360f && s >= 0.15f && (h >= 39f / 360f || s >= 0.46f);
+
+        // The brew's liquid runs cyan -> blue -> violet from bottom to top, like the channel swirl.
+        // Texture V tracks height on the bottle mesh (checked against the mesh). In MistlandsPotions_d
+        // the bottle's base is at v ~0.08, the leather strap covers v ~0.09-0.15 and the liquid
+        // surface (where the grey glass starts) is at v ~0.25. Mapping 0.05-0.25 puts cyan below the
+        // strap and runs the visible liquid above it from blue to violet. In the 64px vanilla icon
+        // the liquid spans v ~0.08-0.52.
+        private static Color BrewLiquidColor(float v) => BifrostGradient(Mathf.InverseLerp(0.05f, 0.25f, v));
+        private static Color BrewIconColor(float v) => BifrostGradient(Mathf.InverseLerp(0.08f, 0.52f, v));
+
+        private static Color BifrostGradient(float t) => t < 0.5f
+            ? Color.Lerp(BifrostVfx.Cyan, BifrostVfx.Blue, t * 2f)
+            : Color.Lerp(BifrostVfx.Blue, BifrostVfx.Violet, t * 2f - 1f);
+
+        // The bottle's own point light sits right on it. Lit color is roughly albedo x light, so a
+        // cyan light turned the violet top blue; a pale lavender keeps the whole gradient visible.
+        private static readonly Color BrewLightColor = new Color(0.75f, 0.7f, 1f);
 
         // Mead Ketill-crafted base that goes into the fermenter.
         private CustomItem AddMeadBase()
@@ -123,8 +141,8 @@ namespace BifrostBrew
             shared.m_name = "$item_bifrostbrew";
             shared.m_description = "$item_bifrostbrew_desc";
 
-            Recolor(item.ItemPrefab, BrewLiquidMaterial, BifrostColor);
-            RecolorIcon(item, BifrostColor);
+            Recolor(item.ItemPrefab, BrewLiquidMaterial, BrewLightColor, BrewLiquidColor);
+            RecolorIcon(item, BifrostColor, BrewIconColor);
 
             // Replace the cloned lingering stamina effect with the teleport.
             shared.m_consumeStatusEffect = CreateTeleportEffects(shared.m_icons[0], shared.m_consumeStatusEffect);
@@ -229,7 +247,9 @@ namespace BifrostBrew
             ItemManager.Instance.AddItemConversion(conversion);
         }
 
-        private static void Recolor(GameObject prefab, string liquidMaterial, Color color)
+        // color tints the lights and, unless colorAtV is given, the liquid. colorAtV maps a texture
+        // V coordinate (0 = bottom) to a liquid color, for a vertical gradient.
+        private static void Recolor(GameObject prefab, string liquidMaterial, Color color, System.Func<float, Color> colorAtV = null)
         {
             // IMPORTANT: sharedMaterials on a clone are the SAME assets the vanilla
             // mead uses. Copy them, or every lingering stamina mead turns blue too.
@@ -258,7 +278,7 @@ namespace BifrostBrew
                             shifted.wrapMode = tex.wrapMode;
                             shifted.filterMode = tex.filterMode;
                             shifted.anisoLevel = tex.anisoLevel;
-                            ShiftHue(shifted, color);
+                            ShiftHue(shifted, colorAtV ?? (_ => color), (h, sat) => sat >= 0.15f);
                             copy.SetTexture("_MainTex", shifted);
                         }
 
@@ -280,7 +300,7 @@ namespace BifrostBrew
         // Vanilla icons are hand-made images (upright, tightly framed, glow painted in) that a
         // RenderManager render of the model can't reproduce. Recolor a copy of the cloned
         // item's vanilla icon instead, so angle, framing and glow match exactly.
-        private static void RecolorIcon(CustomItem item, Color color)
+        private static void RecolorIcon(CustomItem item, Color color, System.Func<float, Color> colorAtV = null)
         {
             var shared = item.ItemDrop.m_itemData.m_shared;
             if (IsHeadless || shared.m_icons == null || shared.m_icons.Length == 0)
@@ -302,7 +322,7 @@ namespace BifrostBrew
                 return;
             }
 
-            ShiftHue(tex, color, IconMinHue, IconMaxHue);
+            ShiftHue(tex, colorAtV ?? (_ => color), IsIconLiquid);
             var pivot = new Vector2(vanilla.pivot.x / vanilla.rect.width, vanilla.pivot.y / vanilla.rect.height);
             var icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), pivot, vanilla.pixelsPerUnit);
             icon.name = item.ItemPrefab.name;
@@ -332,19 +352,24 @@ namespace BifrostBrew
             return result;
         }
 
-        // Moves every colored pixel whose hue is within [minHue, maxHue] to the hue of target,
-        // keeping its saturation, brightness and alpha. Near-grey pixels (the empty glass, the
-        // white bowl) are left alone. Uploads the result and makes it no longer CPU-readable.
-        private static void ShiftHue(Texture2D tex, Color target, float minHue = 0f, float maxHue = 1f)
+        // Moves every pixel that shouldShift(hue, saturation) accepts to the hue of colorAtV(v),
+        // where v is the pixel row's texture V (0 = bottom), keeping its saturation, brightness and
+        // alpha. Callers skip near-grey pixels (the empty glass, the white bowl) via saturation.
+        // Uploads the result and makes it no longer CPU-readable.
+        private static void ShiftHue(Texture2D tex, System.Func<float, Color> colorAtV, System.Func<float, float, bool> shouldShift)
         {
-            Color.RGBToHSV(target, out float hue, out _, out _);
+            // GetPixels runs left to right, bottom to top, so row y is pixel index / width.
+            var rowHue = new float[tex.height];
+            for (int y = 0; y < rowHue.Length; y++)
+                Color.RGBToHSV(colorAtV((y + 0.5f) / tex.height), out rowHue[y], out _, out _);
+
             var pixels = tex.GetPixels();
             for (int i = 0; i < pixels.Length; i++)
             {
                 Color.RGBToHSV(pixels[i], out float h, out float s, out float v);
-                if (s < 0.15f || h < minHue || h > maxHue) continue;
+                if (!shouldShift(h, s)) continue;
 
-                var shifted = Color.HSVToRGB(hue, s, v);
+                var shifted = Color.HSVToRGB(rowHue[i / tex.width], s, v);
                 shifted.a = pixels[i].a;
                 pixels[i] = shifted;
             }

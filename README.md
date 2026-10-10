@@ -1,6 +1,8 @@
 # Bifrost Brew
 
-A Valheim mod that adds **Bifrost Brew**, a shimmering blue mead that carries you home across the rainbow bridge. Drink it and, after a short channel, you are teleported to your bed. Think of it as a hearthstone for Valheim that still plays by the game's portal rules.
+*Ride the rainbow bridge home.*
+
+A Valheim mod that adds **Bifrost Brew**, a shimmering mead that opens the Bifrost beneath your feet and carries you home to your bed. It still plays by the game's portal rules, so your ore stays behind.
 
 Built with [BepInEx](https://github.com/BepInEx/BepInEx) and [Jötunn](https://github.com/Valheim-Modding/Jotunn).
 
@@ -8,12 +10,11 @@ Built with [BepInEx](https://github.com/BepInEx/BepInEx) and [Jötunn](https://g
 
 ## Features
 
-- **Mead base: Bifrost**, brewed at the Mead Ketill.
-- **Bifrost Brew**, fermented from the base. Drinking it opens the Bifrost and sends you home.
-- A rune-ringed portal opens under your feet while blue light spirals around you, then you vanish in a pillar of light. Other players see it too.
-- Place Bifrost Brew on tables and shelves with the Serving Tray, like vanilla meads. Drinking a placed brew sends you home too.
-- Blue recolors of the lingering stamina mead and its mead base, including matching inventory icons and a blue glow.
-- Server-synced config for channel time and cooldown.
+- **A mead that takes you home.** Drink it, and a few heartbeats later you're standing by your bed.
+- **A proper send-off.** A rune-circled portal opens under your feet, light spirals around you, and you vanish in a pillar of light. Other players see it too.
+- **Brewed like any other mead.** Make the base at the Mead Ketill, then ferment it.
+- **Looks the part.** A shimmering, glowing bottle that you can set out on tables and shelves with the Serving Tray. Drinking it straight off the table works too.
+- **Tune it to taste.** The countdown, cooldown and recipe are all configurable and synced from the server.
 
 ## How to get it
 
