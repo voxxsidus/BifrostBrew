@@ -19,7 +19,7 @@ namespace BifrostBrew
     {
         public const string PluginGUID = "com.voxxsidus.bifrostbrew";
         public const string PluginName = "BifrostBrew";
-        public const string PluginVersion = "0.1.0";
+        public const string PluginVersion = "0.1.1";
 
         private static readonly Color BifrostColor = new Color(0.35f, 0.75f, 1f);
 

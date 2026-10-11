@@ -62,5 +62,8 @@ To install by hand, copy `BifrostBrew.dll` into `BepInEx/plugins/BifrostBrew/`.
 
 ## Changelog
 
+**0.1.1**
+- New icon and refreshed description.
+
 **0.1.0**
 - First release. Skål!

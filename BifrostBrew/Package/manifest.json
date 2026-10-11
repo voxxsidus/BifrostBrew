@@ -1,7 +1,7 @@
 {
   "name": "BifrostBrew",
   "description": "A shimmering blue mead that teleports you home to your bed after a short channel. Follows portal rules: no ores or metals.",
-  "version_number": "0.1.0",
+  "version_number": "0.1.1",
   "website_url": "https://github.com/voxxsidus/BifrostBrew",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2333",

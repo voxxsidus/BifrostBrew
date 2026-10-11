@@ -6,7 +6,7 @@ A Valheim mod that adds **Bifrost Brew**, a shimmering mead that opens the Bifro
 
 Built with [BepInEx](https://github.com/BepInEx/BepInEx) and [Jötunn](https://github.com/Valheim-Modding/Jotunn).
 
-> **Status:** early development (v0.1.0). The recipe and balance are still being tuned.
+> **Status:** early development (v0.1.1). The recipe and balance are still being tuned.
 
 ## Features
 
